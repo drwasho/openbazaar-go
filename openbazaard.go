@@ -81,6 +81,7 @@ import (
 	smux "gx/ipfs/QmeZBgYBHvxMukGK5ojg28BCNLB9SeXqT7XXg6o7r2GbJy/go-stream-muxer"
 	"syscall"
 	"time"
+	"github.com/OpenBazaar/openbazaar-go/bitcoin/zcashd"
 )
 
 var log = logging.MustGetLogger("main")
@@ -715,6 +716,12 @@ func (x *Start) Execute(args []string) error {
 	e := new(namepb.IpnsEntry)
 	proto.Unmarshal(dhtrec.GetValue(), e)
 
+	// Exchange rates
+	var exchangeRates bitcoin.ExchangeRates
+	if !x.DisableExchangeRates {
+		exchangeRates = exchange.NewBitcoinPriceFetcher(torDialer)
+	}
+
 	// Wallet
 	mn, err := sqliteDB.Config().GetMnemonic()
 	if err != nil {
@@ -788,6 +795,18 @@ func (x *Start) Execute(args []string) error {
 			usetor = true
 		}
 		crytoWallet = bitcoind.NewBitcoindWallet(mn, &params, repoPath, walletCfg.TrustedPeer, walletCfg.Binary, walletCfg.RPCUser, walletCfg.RPCPassword, usetor, controlPort)
+	case "zcashd":
+		if walletCfg.Binary == "" {
+			return errors.New("The path to the zcashd binary must be specified in the config file when using zcashd")
+		}
+		usetor := false
+		if usingTor && !usingClearnet {
+			usetor = true
+		}
+		crytoWallet = zcashd.NewZcashdWallet(mn, &params, repoPath, walletCfg.TrustedPeer, walletCfg.Binary, walletCfg.RPCUser, walletCfg.RPCPassword, usetor, controlPort)
+		if !x.DisableExchangeRates {
+			exchangeRates = zcashd.NewZcashPriceFetcher(torDialer)
+		}
 	default:
 		log.Fatal("Unknown wallet type")
 	}
@@ -884,11 +903,6 @@ func (x *Start) Execute(args []string) error {
 		err = errors.New("Invalid storage option")
 		log.Error(err)
 		return err
-	}
-
-	var exchangeRates bitcoin.ExchangeRates
-	if !x.DisableExchangeRates {
-		exchangeRates = exchange.NewBitcoinPriceFetcher(torDialer)
 	}
 
 	// Set up the ban manager
