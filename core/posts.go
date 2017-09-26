@@ -103,8 +103,8 @@ func (n *OpenBazaarNode) extractpostData(post *pb.SignedPost) (postData, error) 
 
 	ld := postData{
 		Hash:      postHash,
-		Slug:      post.Post.Post.Slug,
-		Title:     post.Post.Post.Title,
+		Slug:      post.Post.Slug,
+		Title:     post.Post.Title,
 	}
 
 	if len(post.Post.Post.Images) > 0 {
