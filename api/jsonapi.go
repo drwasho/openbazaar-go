@@ -485,6 +485,8 @@ func (i *jsonAPIHandler) POSTImage(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+// POST a listing
+
 func (i *jsonAPIHandler) POSTListing(w http.ResponseWriter, r *http.Request) {
 	ld := new(pb.Listing)
 	err := jsonpb.Unmarshal(r.Body, ld)
@@ -566,6 +568,8 @@ func (i *jsonAPIHandler) POSTListing(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+// PUT a listing (i.e. edit a listing)
+
 func (i *jsonAPIHandler) PUTListing(w http.ResponseWriter, r *http.Request) {
 	ld := new(pb.Listing)
 	err := jsonpb.Unmarshal(r.Body, ld)
@@ -635,6 +639,8 @@ func (i *jsonAPIHandler) PUTListing(w http.ResponseWriter, r *http.Request) {
 	SanitizedResponse(w, `{}`)
 	return
 }
+
+// DELETE a listing
 
 func (i *jsonAPIHandler) DELETEListing(w http.ResponseWriter, r *http.Request) {
 	_, slug := path.Split(r.URL.Path)
@@ -1335,6 +1341,8 @@ func (i *jsonAPIHandler) DELETEModerator(w http.ResponseWriter, r *http.Request)
 	return
 }
 
+// GET a list of listings from yourself or a peer
+
 func (i *jsonAPIHandler) GETListings(w http.ResponseWriter, r *http.Request) {
 	_, peerId := path.Split(r.URL.Path)
 	if peerId == "" || strings.ToLower(peerId) == "listings" || peerId == i.node.IpfsNode.Identity.Pretty() {
@@ -1360,6 +1368,8 @@ func (i *jsonAPIHandler) GETListings(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "public, max-age=600, immutable")
 	}
 }
+
+// GET a listing from yourself or a peer
 
 func (i *jsonAPIHandler) GETListing(w http.ResponseWriter, r *http.Request) {
 	urlPath, listingId := path.Split(r.URL.Path)
@@ -3490,6 +3500,8 @@ func (i *jsonAPIHandler) GETPeerInfo(w http.ResponseWriter, r *http.Request) {
 	SanitizedResponse(w, string(out))
 }
 
+// POST a post
+
 func (i *jsonAPIHandler) POSTPost(w http.ResponseWriter, r *http.Request) {
 	ld := new(pb.Post)
 	err := jsonpb.Unmarshal(r.Body, ld)
@@ -3559,6 +3571,8 @@ func (i *jsonAPIHandler) POSTPost(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+// GET a list of posts from yourself or a peer
+
 func (i *jsonAPIHandler) GETPosts(w http.ResponseWriter, r *http.Request) {
 	_, peerId := path.Split(r.URL.Path)
 	if peerId == "" || strings.ToLower(peerId) == "posts" || peerId == i.node.IpfsNode.Identity.Pretty() {
@@ -3584,6 +3598,8 @@ func (i *jsonAPIHandler) GETPosts(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "public, max-age=600, immutable")
 	}
 }
+
+// GET an individual post from yourself or a peer
 
 func (i *jsonAPIHandler) GETPost(w http.ResponseWriter, r *http.Request) {
 	urlPath, postId := path.Split(r.URL.Path)
@@ -3671,6 +3687,8 @@ func (i *jsonAPIHandler) GETPost(w http.ResponseWriter, r *http.Request) {
 		SanitizedResponseM(w, out, new(pb.SignedPost))
 	}
 }
+
+// DELETE a post
 
 func (i *jsonAPIHandler) DELETEPost(w http.ResponseWriter, r *http.Request) {
 	_, slug := path.Split(r.URL.Path)
