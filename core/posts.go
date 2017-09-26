@@ -103,9 +103,16 @@ func (n *OpenBazaarNode) extractpostData(post *pb.SignedPost) (postData, error) 
 
 	ld := postData{
 		Hash:      postHash,
-		Slug:      post.Post.Slug,
-		Title:     post.Post.Title,
-		Thumbnail: thumbnail{post.Post.Post.Images[0].Tiny, post.Post.Post.Images[0].Small, post.Post.Post.Images[0].Medium},
+		Slug:      post.Post.Post.Slug,
+		Title:     post.Post.Post.Title,
+	}
+
+	if len(post.Post.Post.Images) > 0 {
+			ld.Thumbnail = thumbnail{
+					post.Post.Post.Images[0].Tiny,
+					post.Post.Post.Images[0].Small,
+					post.Post.Post.Images[0].Medium,
+			}
 	}
 	return ld, nil
 }
