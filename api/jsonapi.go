@@ -3408,6 +3408,9 @@ func (i *jsonAPIHandler) GETHealthCheck(w http.ResponseWriter, r *http.Request) 
 func (i *jsonAPIHandler) POSTPublish(w http.ResponseWriter, r *http.Request) {
 	// Republish to IPNS
 	if err := i.node.SeedNode(); err != nil {
+		if reason == os.ErrClosed.String() {
+			panic(reason)
+		}
 		ErrorResponse(w, http.StatusInternalServerError, err.Error())
 		return
 	}
