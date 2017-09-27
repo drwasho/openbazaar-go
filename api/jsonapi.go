@@ -3489,3 +3489,270 @@ func (i *jsonAPIHandler) GETPeerInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	SanitizedResponse(w, string(out))
 }
+
+func (i *jsonAPIHandler) GETClassifieds(w http.ResponseWriter, r *http.Request) {
+	_, peerId := path.Split(r.URL.Path)
+	if peerId == "" || strings.ToLower(peerId) == "classifieds" || peerId == i.node.IpfsNode.Identity.Pretty() {
+		classifiedsBytes, err := i.node.GETClassifieds()
+		if err != nil {
+			ErrorResponse(w, http.StatusNotFound, err.Error())
+			return
+		}
+		SanitizedResponse(w, string(classifiedsBytes))
+	} else {
+		pid, err := i.node.NameSystem.Resolve(context.Background(), peerId)
+		if err != nil {
+			ErrorResponse(w, http.StatusNotFound, err.Error())
+			return
+		}
+		peerId = pid.Pretty()
+		classifiedsBytes, err := ipfs.ResolveThenCat(i.node.Context, ipnspath.FromString(path.Join(peerId, "classifieds.json")))
+		if err != nil {
+			ErrorResponse(w, http.StatusNotFound, err.Error())
+			return
+		}
+		SanitizedResponse(w, string(classifiedsBytes))
+		w.Header().Set("Cache-Control", "public, max-age=600, immutable")
+	}
+}
+
+func (i *jsonAPIHandler) GETClassified(w http.ResponseWriter, r *http.Request) {
+	urlPath, classifiedId := path.Split(r.URL.Path)
+	_, peerId := path.Split(urlPath[:len(urlPath)-1])
+	m := jsonpb.Marshaler{
+		EnumsAsInts:  false,
+		EmitDefaults: false,
+		Indent:       "    ",
+		OrigName:     false,
+	}
+	if peerId == "" || strings.ToLower(peerId) == "classified" || peerId == i.node.IpfsNode.Identity.Pretty() {
+		sl := new(pb.SignedClassified)
+		_, err := cid.Decode(classifiedId)
+		if err == nil {
+			sl, err = i.node.GetClassifiedFromHash(classifiedId)
+			if err != nil {
+				ErrorResponse(w, http.StatusNotFound, "Classified not found.")
+				return
+			}
+			sl.Hash = classifiedId
+		} else {
+			sl, err = i.node.GetClassifiedFromSlug(classifiedId)
+			if err != nil {
+				ErrorResponse(w, http.StatusNotFound, "Classified not found.")
+				return
+			}
+			hash, err := ipfs.GetHashOfFile(i.node.Context, path.Join(i.node.RepoPath, "root", "classifieds", classifiedId+".json"))
+			if err != nil {
+				ErrorResponse(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			sl.Hash = hash
+		}
+
+		out, err := m.MarshalToString(sl)
+		if err != nil {
+			ErrorResponse(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		SanitizedResponseM(w, string(out), new(pb.SignedClassified))
+		return
+	} else {
+		var classifiedBytes []byte
+		var hash string
+		_, err := cid.Decode(classifiedId)
+		if err == nil {
+			classifiedBytes, err = ipfs.Cat(i.node.Context, classifiedId)
+			if err != nil {
+				ErrorResponse(w, http.StatusNotFound, err.Error())
+				return
+			}
+			hash = classifiedId
+			w.Header().Set("Cache-Control", "public, max-age=29030400, immutable")
+		} else {
+			pid, err := i.node.NameSystem.Resolve(context.Background(), peerId)
+			if err != nil {
+				ErrorResponse(w, http.StatusNotFound, err.Error())
+				return
+			}
+			peerId = pid.Pretty()
+			classifiedBytes, err = ipfs.ResolveThenCat(i.node.Context, ipnspath.FromString(path.Join(peerId, "classifieds", classifiedId+".json")))
+			if err != nil {
+				ErrorResponse(w, http.StatusNotFound, err.Error())
+				return
+			}
+			hash, err = ipfs.GetHash(i.node.Context, bytes.NewReader(classifiedBytes))
+			if err != nil {
+				ErrorResponse(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			w.Header().Set("Cache-Control", "public, max-age=600, immutable")
+		}
+		sl := new(pb.SignedClassified)
+		err = jsonpb.UnmarshalString(string(classifiedBytes), sl)
+		if err != nil {
+			ErrorResponse(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		sl.Hash = hash
+		out, err := m.MarshalToString(sl)
+		if err != nil {
+			ErrorResponse(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		SanitizedResponseM(w, out, new(pb.SignedClassified))
+	}
+}
+
+func (i *jsonAPIHandler) POSTClassified(w http.ResponseWriter, r *http.Request) {
+	ld := new(pb.Classified)
+	err := jsonpb.Unmarshal(r.Body, ld)
+	if err != nil {
+		ErrorResponse(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// If the classified already exists tell them to use PUT
+	classifiedPath := path.Join(i.node.RepoPath, "root", "classifieds", ld.Slug+".json")
+	if ld.Slug != "" {
+		_, ferr := os.Stat(classifiedPath)
+		if !os.IsNotExist(ferr) {
+			ErrorResponse(w, http.StatusConflict, "Classified already exists. Use PUT.")
+			return
+		}
+	} else {
+		ld.Slug, err = i.node.GenerateSlug(ld.Item.Title)
+		if err != nil {
+			ErrorResponse(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	signedClassified, err := i.node.SignClassified(ld)
+	if err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	classifiedPath = path.Join(i.node.RepoPath, "root", "classifieds", signedClassified.Classified.Slug+".json")
+	f, err := os.Create(classifiedPath)
+	if err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	m := jsonpb.Marshaler{
+		EnumsAsInts:  false,
+		EmitDefaults: false,
+		Indent:       "    ",
+		OrigName:     false,
+	}
+	out, err := m.MarshalToString(signedClassified)
+	if err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if _, err := f.WriteString(out); err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	err = i.node.UpdateClassifiedIndex(signedClassified)
+	if err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	// Update followers/following
+	err = i.node.UpdateFollow()
+	if err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := i.node.SeedNode(); err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	SanitizedResponse(w, fmt.Sprintf(`{"slug": "%s"}`, signedClassified.Classified.Slug))
+	return
+}
+
+func (i *jsonAPIHandler) PUTClassified(w http.ResponseWriter, r *http.Request) {
+	ld := new(pb.Classified)
+	err := jsonpb.Unmarshal(r.Body, ld)
+	if err != nil {
+		ErrorResponse(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	classifiedPath := path.Join(i.node.RepoPath, "root", "classifieds", ld.Slug+".json")
+	_, ferr := os.Stat(classifiedPath)
+	if os.IsNotExist(ferr) {
+		ErrorResponse(w, http.StatusNotFound, "Classified not found.")
+		return
+	}
+	signedClassified, err := i.node.SignClassified(ld)
+	if err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	f, err := os.Create(classifiedPath)
+	if err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	m := jsonpb.Marshaler{
+		EnumsAsInts:  false,
+		EmitDefaults: false,
+		Indent:       "    ",
+		OrigName:     false,
+	}
+	out, err := m.MarshalToString(signedClassified)
+	if err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	if _, err := f.WriteString(out); err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	err = i.node.UpdateClassifiedIndex(signedClassified)
+	if err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Update followers/following
+	err = i.node.UpdateFollow()
+	if err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, "File Write Error: "+err.Error())
+		return
+	}
+	if err := i.node.SeedNode(); err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	SanitizedResponse(w, `{}`)
+	return
+}
+
+func (i *jsonAPIHandler) DELETEClassified(w http.ResponseWriter, r *http.Request) {
+	_, slug := path.Split(r.URL.Path)
+	classifiedPath := path.Join(i.node.RepoPath, "root", "classifieds", slug+".json")
+	_, ferr := os.Stat(classifiedPath)
+	if os.IsNotExist(ferr) {
+		ErrorResponse(w, http.StatusNotFound, "Classified not found.")
+		return
+	}
+	err := i.node.DeleteClassified(slug)
+	if err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	err = i.node.UpdateFollow()
+	if err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, "File Write Error: "+err.Error())
+		return
+	}
+	if err := i.node.SeedNode(); err != nil {
+		ErrorResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	SanitizedResponse(w, `{}`)
+	return
+}

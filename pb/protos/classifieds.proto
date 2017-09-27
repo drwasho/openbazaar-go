@@ -1,0 +1,77 @@
+syntax = "proto3";
+option go_package = "pb";
+
+
+import "contracts.proto";
+import "countrycodes.proto";
+import "google/protobuf/timestamp.proto";
+
+message Classified {
+    string slug                             = 1;
+    ID vendorID                             = 2;
+    Metadata metadata                       = 3;
+    Item item                               = 4;
+    repeated ShippingOption shippingOptions = 5;
+    string termsAndConditions               = 6;
+    string refundPolicy                     = 7;
+
+    message Metadata {
+        uint32 version                     = 1;
+        ContractType contractType          = 2;
+        Format format                      = 3;
+        google.protobuf.Timestamp expiry   = 4;
+        repeated string acceptedCurrencies = 5;
+        string pricingCurrency             = 6;
+        string language                    = 7;
+
+        enum ContractType {
+            PHYSICAL_GOOD = 0;
+            DIGITAL_GOOD  = 1;
+            SERVICE       = 2;
+            CROWD_FUND    = 3;
+        }
+
+        enum Format {
+            FIXED_PRICE  = 0;
+            AUCTION      = 1;
+        }
+    }
+
+    message Item {
+        string title               = 1;
+        string description         = 2;
+        string processingTime      = 3;
+        uint64 price               = 4;
+        bool nsfw                  = 5;
+        repeated string tags       = 6;
+        repeated Image images      = 7;
+        repeated string categories = 8;
+        string condition           = 9;
+
+        message Image {
+            string filename = 1;
+            string original = 2;
+            string large    = 3;
+            string medium   = 4;
+            string small    = 5;
+            string tiny     = 6;
+        }
+    }
+
+    message ShippingOption {
+        string name                         = 1;
+        ShippingType type                   = 2;
+        repeated CountryCode regions        = 3;
+
+        enum ShippingType {
+            LOCAL_PICKUP = 0;
+            FIXED_PRICE  = 1;
+        }
+    }
+}
+
+message SignedClassified {
+    Classified classified   = 1;
+    string hash             = 2;
+    bytes signature         = 3;
+}

@@ -268,6 +268,11 @@ func (n *OpenBazaarNode) appendCountsToProfile(profile *pb.Profile) (*pb.Profile
 		profile.Stats.FollowingCount = followingCount
 		changed = true
 	}
+	classifiedCount := uint32(n.Datastore.GetClassifiedCount().Count())
+	if classifiedCount != profile.Stats.ClassifiedCount {
+		profile.Stats.ClassifiedCount = classifiedCount
+		changed = true
+	}
 	return profile, changed, nil
 }
 
