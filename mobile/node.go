@@ -96,7 +96,7 @@ func NewNode(config NodeConfig) (*Node, error) {
 
 	dataSharing, err := repo.GetDataSharing(configFile)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	walletCfg, err := repo.GetWalletConfig(configFile)
@@ -242,7 +242,7 @@ func NewNode(config NodeConfig) (*Node, error) {
 	for _, pnd := range dataSharing.PushTo {
 		p, err := peer.IDB58Decode(pnd)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		pushNodes = append(pushNodes, p)
 	}
