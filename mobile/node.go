@@ -59,15 +59,19 @@ import (
 
 type Node struct {
 	node       *core.OpenBazaarNode
-	config     NodeConfig
+	config     *NodeConfig
 	cancel     context.CancelFunc
 	ipfsConfig *ipfscore.BuildCfg
 	apiConfig  *repo.APIConfig
 }
 
-func NewNode(config NodeConfig) (*Node, error) {
+type Mobile struct {
 
-	repoLockFile := filepath.Join(config.RepoPath, lockfile.LockFile)
+}
+
+func (m *Mobile) NewNode(RepoPath string, UserAgent string, Testnet bool, WalletTrustedPeer string) (*Node, error) {
+
+	repoLockFile := filepath.Join(RepoPath, lockfile.LockFile)
 	os.Remove(repoLockFile)
 
 	// Logging
@@ -75,7 +79,7 @@ func NewNode(config NodeConfig) (*Node, error) {
 	logger = logging.NewBackendFormatter(backendStdout, stdoutLogFormat)
 	logging.SetBackend(logger)
 
-	sqliteDB, err := initializeRepo(config.RepoPath, "", "", true, time.Now())
+	sqliteDB, err := initializeRepo(RepoPath, "", "", true, time.Now())
 	if err != nil && err != repo.ErrRepoExists {
 		return nil, err
 	}
@@ -84,7 +88,7 @@ func NewNode(config NodeConfig) (*Node, error) {
 	creationDate, _ := sqliteDB.Config().GetCreationDate()
 
 	// Load config
-	configFile, err := ioutil.ReadFile(path.Join(config.RepoPath, "config"))
+	configFile, err := ioutil.ReadFile(path.Join(RepoPath, "config"))
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +100,7 @@ func NewNode(config NodeConfig) (*Node, error) {
 
 	dataSharing, err := repo.GetDataSharing(configFile)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	walletCfg, err := repo.GetWalletConfig(configFile)
@@ -109,11 +113,11 @@ func NewNode(config NodeConfig) (*Node, error) {
 	}
 
 	// Create user-agent file
-	userAgentBytes := []byte(core.USERAGENT + config.UserAgent)
-	ioutil.WriteFile(path.Join(config.RepoPath, "root", "user_agent"), userAgentBytes, os.ModePerm)
+	userAgentBytes := []byte(core.USERAGENT + UserAgent)
+	ioutil.WriteFile(path.Join(RepoPath, "root", "user_agent"), userAgentBytes, os.ModePerm)
 
 	// IPFS node setup
-	r, err := fsrepo.Open(config.RepoPath)
+	r, err := fsrepo.Open(RepoPath)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +139,7 @@ func NewNode(config NodeConfig) (*Node, error) {
 	cfg.Swarm.DisableNatPortMap = true
 
 	// Setup testnet
-	if config.Testnet {
+	if Testnet {
 		testnetBootstrapAddrs, err := repo.GetTestnetBootstrapAddrs(configFile)
 		if err != nil {
 			return nil, err
@@ -169,7 +173,7 @@ func NewNode(config NodeConfig) (*Node, error) {
 		return nil, err
 	}
 	var params chaincfg.Params
-	if config.Testnet {
+	if Testnet {
 		params = chaincfg.TestNet3Params
 	} else {
 		params = chaincfg.MainNetParams
@@ -177,7 +181,7 @@ func NewNode(config NodeConfig) (*Node, error) {
 
 	var wallet wallet.Wallet
 	var tp net.Addr
-	if config.WalletTrustedPeer != "" {
+	if WalletTrustedPeer != "" {
 		tp, err = net.ResolveTCPAddr("tcp", walletCfg.TrustedPeer)
 		if err != nil {
 			return nil, err
@@ -195,7 +199,7 @@ func NewNode(config NodeConfig) (*Node, error) {
 		MediumFee:    uint64(walletCfg.MediumFeeDefault),
 		HighFee:      uint64(walletCfg.HighFeeDefault),
 		FeeAPI:       *feeApi,
-		RepoPath:     config.RepoPath,
+		RepoPath:     RepoPath,
 		CreationDate: creationDate,
 		DB:           sqliteDB,
 		UserAgent:    "OpenBazaar",
@@ -242,14 +246,14 @@ func NewNode(config NodeConfig) (*Node, error) {
 	for _, pnd := range dataSharing.PushTo {
 		p, err := peer.IDB58Decode(pnd)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		pushNodes = append(pushNodes, p)
 	}
 
 	// OpenBazaar node setup
 	core.Node = &core.OpenBazaarNode{
-		RepoPath:      config.RepoPath,
+		RepoPath:      RepoPath,
 		Datastore:     sqliteDB,
 		Wallet:        wallet,
 		NameSystem:    ns,
@@ -263,7 +267,7 @@ func NewNode(config NodeConfig) (*Node, error) {
 		return nil, errors.New("No gateway addresses configured")
 	}
 
-	return &Node{node: core.Node, config: config, ipfsConfig: ncfg, apiConfig: apiConfig}, nil
+	return &Node{node: core.Node, ipfsConfig: ncfg, apiConfig: apiConfig}, nil
 }
 
 func (n *Node) startIPFSNode(repoPath string, config *ipfscore.BuildCfg) (*ipfscore.IpfsNode, commands.Context, error) {
@@ -287,7 +291,7 @@ func (n *Node) startIPFSNode(repoPath string, config *ipfscore.BuildCfg) (*ipfsc
 	return nd, ctx, nil
 }
 
-func (n *Node) Start() error {
+func (m *Mobile) Start(n *Node) error {
 	nd, ctx, err := n.startIPFSNode(n.config.RepoPath, n.ipfsConfig)
 	if err != nil {
 		return err
@@ -408,7 +412,7 @@ func newHTTPGateway(node *core.OpenBazaarNode, authCookie http.Cookie, config re
 		corehttp.CommandsROOption(node.Context),
 		corehttp.VersionOption(),
 		corehttp.IPNSHostnameOption(),
-		corehttp.GatewayOption(config.Authenticated, config.AllowedIPs, authCookie, config.Username, config.Password, cfg.Gateway.Writable, "/ipfs", "/ipns"),
+		corehttp.GatewayOption(cfg.Gateway.Writable, "/ipfs", "/ipns"),
 	}
 
 	if len(cfg.Gateway.RootRedirect) > 0 {
