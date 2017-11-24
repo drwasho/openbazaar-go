@@ -255,7 +255,7 @@ func (n *OpenBazaarNode) updatePostOnDisk(index []postData, ld postData) error {
 	return nil
 }
 
-//UpdatePostHashes  [Update the hashes in the posts.json file]
+// UpdatePostHashes  [Update the hashes in the posts.json file]
 func (n *OpenBazaarNode) UpdatePostHashes(hashes map[string]string) error {
 	indexPath := path.Join(n.RepoPath, "root", "posts.json")
 
