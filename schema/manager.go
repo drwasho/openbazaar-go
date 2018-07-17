@@ -223,13 +223,19 @@ func (m *openbazaarSchemaManager) buildIPFSRootDirectories() error {
 	if err := os.MkdirAll(m.DataPathJoin("root", "feed"), os.ModePerm); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(m.DataPathJoin("root", "posts"), os.ModePerm); err != nil {
-		return err
-	}
 	if err := os.MkdirAll(m.DataPathJoin("root", "channel"), os.ModePerm); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(m.DataPathJoin("root", "files"), os.ModePerm); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(m.DataPathJoin("social"), os.ModePerm); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(m.DataPathJoin("social", "posts"), os.ModePerm); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(m.DataPathJoin("social", "reactions"), os.ModePerm); err != nil {
 		return err
 	}
 	return nil

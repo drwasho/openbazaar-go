@@ -3648,7 +3648,7 @@ func (i *jsonAPIHandler) POSTPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If the post already exists in path, tell them to use PUT
-	postPath := path.Join(i.node.RepoPath, "root", "posts", ld.Slug+".json")
+	postPath := path.Join(i.node.RepoPath, "social", "posts", ld.Slug+".json")
 	if ld.Slug != "" {
 		_, ferr := os.Stat(postPath)
 		if !os.IsNotExist(ferr) {
@@ -3657,8 +3657,8 @@ func (i *jsonAPIHandler) POSTPost(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		// The post isn't in the path and is new, therefore add required data (slug, timestamp)
-		// Generate a slug from the title
-		ld.Slug, err = i.node.GeneratePostSlug(ld.Title)
+		// Generate a slug from the status
+		ld.Slug, err = i.node.GeneratePostSlug(ld.Status)
 		if err != nil {
 			ErrorResponse(w, http.StatusInternalServerError, err.Error())
 			return
@@ -3677,7 +3677,7 @@ func (i *jsonAPIHandler) POSTPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Add to path
-	postPath = path.Join(i.node.RepoPath, "root", "posts", signedPost.Post.Slug+".json")
+	postPath = path.Join(i.node.RepoPath, "social", "posts", signedPost.Post.Slug+".json")
 	f, err := os.Create(postPath)
 	if err != nil {
 		ErrorResponse(w, http.StatusInternalServerError, err.Error())
@@ -3727,7 +3727,7 @@ func (i *jsonAPIHandler) PUTPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Check if the post exists
-	postPath := path.Join(i.node.RepoPath, "root", "posts", ld.Slug+".json")
+	postPath := path.Join(i.node.RepoPath, "social", "posts", ld.Slug+".json")
 	_, ferr := os.Stat(postPath)
 	if os.IsNotExist(ferr) {
 		ErrorResponse(w, http.StatusNotFound, "Post not found.")
@@ -3789,7 +3789,7 @@ func (i *jsonAPIHandler) PUTPost(w http.ResponseWriter, r *http.Request) {
 // DELETE a post
 func (i *jsonAPIHandler) DELETEPost(w http.ResponseWriter, r *http.Request) {
 	_, slug := path.Split(r.URL.Path)
-	postPath := path.Join(i.node.RepoPath, "root", "posts", slug+".json")
+	postPath := path.Join(i.node.RepoPath, "social", "posts", slug+".json")
 	_, ferr := os.Stat(postPath)
 	if os.IsNotExist(ferr) {
 		ErrorResponse(w, http.StatusNotFound, "Post not found.")
@@ -3866,7 +3866,7 @@ func (i *jsonAPIHandler) GETPost(w http.ResponseWriter, r *http.Request) {
 				ErrorResponse(w, http.StatusNotFound, "Post not found.")
 				return
 			}
-			hash, err := ipfs.GetHashOfFile(i.node.IpfsNode, path.Join(i.node.RepoPath, "root", "posts", postId+".json"))
+			hash, err := ipfs.GetHashOfFile(i.node.IpfsNode, path.Join(i.node.RepoPath, "social", "posts", postId+".json"))
 			if err != nil {
 				ErrorResponse(w, http.StatusInternalServerError, err.Error())
 				return
