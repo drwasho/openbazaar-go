@@ -21,19 +21,22 @@ import (
 
 // Constants for validation
 const (
-	PostTitleMaxCharacters    = 280
+	PostStatusMaxCharacters   = 280
 	PostLongFormMaxCharacters = 50000
 	MaxPostTags               = 50
+	MaxPostChannels           = 50
 	PostTagsMaxCharacters     = 80
+	PostChannelsMaxCharacters = 200
 )
 
 // JSON structure returned for each post from GETPosts
 type postData struct {
 	Hash      string      `json:"hash"`
 	Slug      string      `json:"slug"`
-	Title     string      `json:"title"`
+	Status    string      `json:"status"`
 	Images    []postImage `json:"images"`
 	Tags      []string    `json:"tags"`
+	Channels  []string    `json:"channels"`
 	Timestamp string      `json:"timestamp"`
 }
 
@@ -43,18 +46,18 @@ type postImage struct {
 	Medium string `json:"medium"`
 }
 
-//GeneratePostSlug  [Create a slug for the post based on the title, if a slug is missing]
-func (n *OpenBazaarNode) GeneratePostSlug(title string) (string, error) {
-	title = strings.Replace(title, "/", "", -1)
-	slugFromTitle := func(title string) string {
+// GeneratePostSlug  [Create a slug for the post based on the status, if a slug is missing]
+func (n *OpenBazaarNode) GeneratePostSlug(status string) (string, error) {
+	status = strings.Replace(status, "/", "", -1)
+	slugFromStatus := func(status string) string {
 		l := SentenceMaxCharacters - SlugBuffer
-		if len(title) < SentenceMaxCharacters-SlugBuffer {
-			l = len(title)
+		if len(status) < SentenceMaxCharacters-SlugBuffer {
+			l = len(status)
 		}
-		return url.QueryEscape(sanitize.Path(strings.ToLower(title[:l])))
+		return url.QueryEscape(sanitize.Path(strings.ToLower(status[:l])))
 	}
 	counter := 1
-	slugBase := slugFromTitle(title)
+	slugBase := slugFromStatus(status)
 	slugToTry := slugBase
 	for {
 		_, err := n.GetPostFromSlug(slugToTry)
@@ -68,7 +71,7 @@ func (n *OpenBazaarNode) GeneratePostSlug(title string) (string, error) {
 	}
 }
 
-//SignPost  [Add the peer's identity to the post and sign it]
+// SignPost  [Add the peer's identity to the post and sign it]
 func (n *OpenBazaarNode) SignPost(post *pb.Post) (*pb.SignedPost, error) {
 
 	sp := new(pb.SignedPost)
@@ -121,7 +124,7 @@ func (n *OpenBazaarNode) SignPost(post *pb.Post) (*pb.SignedPost, error) {
 	return sp, nil
 }
 
-//UpdatePostIndex  [Update the posts index]
+// UpdatePostIndex  [Update the posts index]
 func (n *OpenBazaarNode) UpdatePostIndex(post *pb.SignedPost) error {
 	ld, err := n.extractpostData(post)
 	if err != nil {
@@ -136,7 +139,7 @@ func (n *OpenBazaarNode) UpdatePostIndex(post *pb.SignedPost) error {
 
 //extractpostData  [Extract data from the post, used to make postData and in GETPosts]
 func (n *OpenBazaarNode) extractpostData(post *pb.SignedPost) (postData, error) {
-	postPath := path.Join(n.RepoPath, "root", "posts", post.Post.Slug+".json")
+	postPath := path.Join(n.RepoPath, "social", "posts", post.Post.Slug+".json")
 
 	// Get the hash of the post's file and add to postHash variable
 	postHash, err := ipfs.GetHashOfFile(n.IpfsNode, postPath)
@@ -167,12 +170,25 @@ func (n *OpenBazaarNode) extractpostData(post *pb.SignedPost) (postData, error) 
 		}
 	}
 
+	/* Add a channel in the post to an array called channels,
+	which will be added to the postData object below */
+	channels := []string{}
+	for _, channel := range post.Post.Channels {
+		if !contains(channels, channel) {
+			channels = append(channels, channel)
+		}
+		if len(channels) > 15 {
+			channels = channels[0:15]
+		}
+	}
+
 	// Create the postData object
 	ld := postData{
-		Hash:  postHash,
-		Slug:  post.Post.Slug,
-		Title: post.Post.Title,
-		Tags:  tags,
+		Hash:     postHash,
+		Slug:     post.Post.Slug,
+		Status:   post.Post.Status,
+		Tags:     tags,
+		Channels: channels,
 	}
 
 	// Add a timestamp to postData if it doesn't exist
@@ -199,7 +215,7 @@ func (n *OpenBazaarNode) extractpostData(post *pb.SignedPost) (postData, error) 
 
 //getPostIndex  [Get the post's index]
 func (n *OpenBazaarNode) getPostIndex() ([]postData, error) {
-	indexPath := path.Join(n.RepoPath, "root", "posts.json")
+	indexPath := path.Join(n.RepoPath, "social", "posts.json")
 
 	var index []postData
 
@@ -220,7 +236,7 @@ func (n *OpenBazaarNode) getPostIndex() ([]postData, error) {
 
 //updatePostOnDisk  [Update the posts.json file in the posts directory]
 func (n *OpenBazaarNode) updatePostOnDisk(index []postData, ld postData) error {
-	indexPath := path.Join(n.RepoPath, "root", "posts.json")
+	indexPath := path.Join(n.RepoPath, "social", "posts.json")
 	// Check to see if the post we are adding already exists in the list. If so delete it.
 	for i, d := range index {
 		if d.Slug != ld.Slug {
@@ -257,7 +273,7 @@ func (n *OpenBazaarNode) updatePostOnDisk(index []postData, ld postData) error {
 
 //UpdatePostHashes  [Update the hashes in the posts.json file]
 func (n *OpenBazaarNode) UpdatePostHashes(hashes map[string]string) error {
-	indexPath := path.Join(n.RepoPath, "root", "posts.json")
+	indexPath := path.Join(n.RepoPath, "social", "posts.json")
 
 	var index []postData
 
@@ -303,7 +319,7 @@ func (n *OpenBazaarNode) UpdatePostHashes(hashes map[string]string) error {
 
 //GetPostCount  [Return the current number of posts]
 func (n *OpenBazaarNode) GetPostCount() int {
-	indexPath := path.Join(n.RepoPath, "root", "posts.json")
+	indexPath := path.Join(n.RepoPath, "social", "posts.json")
 
 	// Read existing file
 	file, err := ioutil.ReadFile(indexPath)
@@ -321,13 +337,13 @@ func (n *OpenBazaarNode) GetPostCount() int {
 
 //DeletePost  [Deletes the post directory, and removes the post from the index]
 func (n *OpenBazaarNode) DeletePost(slug string) error {
-	toDelete := path.Join(n.RepoPath, "root", "posts", slug+".json")
+	toDelete := path.Join(n.RepoPath, "social", "posts", slug+".json")
 	err := os.Remove(toDelete)
 	if err != nil {
 		return err
 	}
 	var index []postData
-	indexPath := path.Join(n.RepoPath, "root", "posts.json")
+	indexPath := path.Join(n.RepoPath, "social", "posts.json")
 	_, ferr := os.Stat(indexPath)
 	if !os.IsNotExist(ferr) {
 		// Read existing file
@@ -375,7 +391,7 @@ func (n *OpenBazaarNode) DeletePost(slug string) error {
 
 //GetPosts  [Get a list of the posts]
 func (n *OpenBazaarNode) GetPosts() ([]byte, error) {
-	indexPath := path.Join(n.RepoPath, "root", "posts.json")
+	indexPath := path.Join(n.RepoPath, "social", "posts.json")
 	file, err := ioutil.ReadFile(indexPath)
 	if os.IsNotExist(err) {
 		return []byte("[]"), nil
@@ -397,7 +413,7 @@ func (n *OpenBazaarNode) GetPosts() ([]byte, error) {
 //GetPostFromHash  [Get a post based on the hash]
 func (n *OpenBazaarNode) GetPostFromHash(hash string) (*pb.SignedPost, error) {
 	// Read posts.json
-	indexPath := path.Join(n.RepoPath, "root", "posts.json")
+	indexPath := path.Join(n.RepoPath, "social", "posts.json")
 	file, err := ioutil.ReadFile(indexPath)
 	if err != nil {
 		return nil, err
@@ -428,7 +444,7 @@ func (n *OpenBazaarNode) GetPostFromHash(hash string) (*pb.SignedPost, error) {
 //GetPostFromSlug  [Get a post based on the slug]
 func (n *OpenBazaarNode) GetPostFromSlug(slug string) (*pb.SignedPost, error) {
 	// Read post file
-	postPath := path.Join(n.RepoPath, "root", "posts", slug+".json")
+	postPath := path.Join(n.RepoPath, "social", "posts", slug+".json")
 	file, err := ioutil.ReadFile(postPath)
 	if err != nil {
 		return nil, err
@@ -475,12 +491,12 @@ func validatePost(post *pb.Post) (err error) {
 		return errors.New("Slugs cannot contain file separators")
 	}
 
-	// Tile
-	if post.Title == "" {
-		return errors.New("Post must have a title")
+	// Status
+	if post.Status == "" {
+		return errors.New("Post must have a status")
 	}
-	if len(post.Title) > PostTitleMaxCharacters {
-		return fmt.Errorf("Title is longer than the max of %d", PostTitleMaxCharacters)
+	if len(post.Status) > PostStatusMaxCharacters {
+		return fmt.Errorf("Status is longer than the max of %d", PostStatusMaxCharacters)
 	}
 
 	// Long Form
@@ -498,6 +514,19 @@ func validatePost(post *pb.Post) (err error) {
 		}
 		if len(tag) > PostTagsMaxCharacters {
 			return fmt.Errorf("Tags must be less than max of %d", PostTagsMaxCharacters)
+		}
+	}
+
+	// Channels
+	if len(post.Channels) > MaxPostChannels {
+		return fmt.Errorf("Channels in the post is longer than the max of %d characters", MaxPostChannels)
+	}
+	for _, channel := range post.Channels {
+		if channel == "" {
+			return errors.New("Channels must not be empty")
+		}
+		if len(channel) > PostChannelsMaxCharacters {
+			return fmt.Errorf("Channels must be less than max of %d", PostChannelsMaxCharacters)
 		}
 	}
 
